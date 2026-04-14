@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Auth requirement for all routes
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'canteen_admin');
+      allow write: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'canteen_admin');
+    }
+
+    match /menuItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (getUserRole() == 'canteen_staff' || getUserRole() == 'canteen_admin');
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || getUserRole() == 'canteen_staff' || getUserRole() == 'canteen_admin');
+      // Student can create order
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      // Staff/admin can update status
+      allow update: if isAuthenticated() && (getUserRole() == 'canteen_staff' || getUserRole() == 'canteen_admin');
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated() && (getUserRole() == 'canteen_staff' || getUserRole() == 'canteen_admin' || resource.data.studentId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+    }
+  }
+}
